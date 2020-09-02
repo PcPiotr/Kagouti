@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.FileUtils
 import android.view.*
 import android.webkit.CookieManager
 import android.webkit.MimeTypeMap
@@ -30,10 +31,13 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
+import org.koin.android.ext.android.inject
 import pl.redny.kagouti.BuildConfig
 import pl.redny.kagouti.R
+import pl.redny.kagouti.application.download.DownloadFile
 import pl.redny.kagouti.databinding.MainFragmentBinding
 import pl.redny.kagouti.domain.DownloadResult
+import pl.redny.kagouti.presentation.component.viewer.FileViewer
 import java.io.File
 import java.io.OutputStream
 import kotlin.math.roundToInt
@@ -52,6 +56,9 @@ class MainFragment : Fragment() {
 
     private val fileUrl =
         "https://d2v9y0dukr6mq2.cloudfront.net/video/thumbnail/rcxbst_b0itvu9rs2/kitten-in-a-cup-turns-its-head-and-watches_raeb_02je_thumbnail-full01.png"
+
+    private val downloadFile : DownloadFile by inject()
+    private val fileViewer: FileViewer by inject()
 
     private lateinit var binding: MainFragmentBinding
     private lateinit var viewModel: MainViewModel
@@ -105,7 +112,6 @@ class MainFragment : Fragment() {
         webview.settings.javaScriptEnabled = true
         webview.loadUrl("https://auth.gog.com/auth?client_id=46899977096215655&redirect_uri=https%3A%2F%2Fembed.gog.com%2Fon_login_success%3Forigin%3Dclient&response_type=code&layout=client2")
         urlRegex = Regex("^https://embed.gog.com/on_login_success.+")
-        // TODO: Use the ViewModel
     }
 
     private fun hasPermissions(context: Context?, permissions: List<String>): Boolean {
@@ -167,13 +173,13 @@ class MainFragment : Fragment() {
         viewModel.setDownloading(true)
         context.contentResolver.openOutputStream(file)?.let { outputStream ->
             CoroutineScope(Dispatchers.IO).launch {
-               downloadFile(outputStream, url).collect {
+                downloadFile.downloadFile(outputStream, url).collect {
                     withContext(Dispatchers.Main) {
                         when (it) {
                             is DownloadResult.Success -> {
                                 viewModel.setDownloading(false)
                                 binding.progressBar.progress = 0
-                                viewFile(file)
+                                fileViewer.viewFile(this@MainFragment.requireActivity(), file)
                             }
 
                             is DownloadResult.Error -> {
@@ -191,55 +197,6 @@ class MainFragment : Fragment() {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    private fun viewFile(uri: Uri) {
-        context?.let { context ->
-            val intent = Intent(Intent.ACTION_VIEW, uri)
-            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            val chooser = Intent.createChooser(intent, "Open with")
-
-            if (intent.resolveActivity(context.packageManager) != null) {
-                startActivity(chooser)
-            } else {
-                Toast.makeText(context, "No suitable application to open file", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-    private fun downloadFile(file: OutputStream, url: String): Flow<DownloadResult> {
-        return flow {
-            try {
-                val client = HttpClient(Android)
-
-                val response: HttpResponse = client.get(url)
-
-                val data = ByteArray(response.contentLength()!!.toInt())
-                var offset = 0
-
-                do {
-                    val currentRead = response.content.readAvailable(data, offset, data.size)
-                    offset += currentRead
-                    val progress = (offset * 100f / data.size).roundToInt()
-                    emit(DownloadResult.Progress(progress))
-                } while (currentRead > 0)
-
-                if (response.status.isSuccess()) {
-                    withContext(Dispatchers.IO) {
-                        file.write(data)
-                    }
-                    emit(DownloadResult.Success)
-                } else {
-                    emit(DownloadResult.Error("File not downloaded"))
-                }
-                client.close()
-            } catch (e: TimeoutCancellationException) {
-                emit(DownloadResult.Error("Connection timed out", e))
-            } catch (t: Throwable) {
-                emit(DownloadResult.Error("Failed to connect"))
             }
         }
     }

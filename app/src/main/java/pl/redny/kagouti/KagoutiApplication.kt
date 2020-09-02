@@ -6,12 +6,11 @@ import org.koin.core.context.startKoin
 import pl.redny.kagouti.di.module.appModule
 
 class KagoutiApplication : Application() {
-    override fun onCreate(){
+    override fun onCreate() {
         super.onCreate()
-        // start Koin!
-//        startKoin {
-//            modules(appModule)
-//            androidContext(this@KagoutiApplication)
-//        }
+        startKoin {
+            androidContext(this@KagoutiApplication)
+            modules(listOf(appModule))
+        }
     }
 }
