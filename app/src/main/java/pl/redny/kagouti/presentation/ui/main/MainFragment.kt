@@ -21,16 +21,9 @@ import androidx.core.content.FileProvider
 import androidx.databinding.DataBindingUtil
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.android.Android
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
 import kotlinx.android.synthetic.main.main_fragment.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.flow
 import org.koin.android.ext.android.inject
 import pl.redny.kagouti.BuildConfig
 import pl.redny.kagouti.R
@@ -39,8 +32,6 @@ import pl.redny.kagouti.databinding.MainFragmentBinding
 import pl.redny.kagouti.domain.DownloadResult
 import pl.redny.kagouti.presentation.component.viewer.FileViewer
 import java.io.File
-import java.io.OutputStream
-import kotlin.math.roundToInt
 
 
 class MainFragment : Fragment() {
@@ -83,12 +74,14 @@ class MainFragment : Fragment() {
 
         viewModel = ViewModelProvider(this).get(MainViewModel::class.java)
 
-        if (hasPermissions(context, PERMISSIONS)) {
-            setDownloadButtonClickListener()
-        } else {
-            requestPermissions(PERMISSIONS.toTypedArray(), PERMISSION_REQUEST_CODE)
-        }
+        checkPermissions()
 
+        configWebview()
+
+        urlRegex = Regex("^https://embed.gog.com/on_login_success.+")
+    }
+
+    private fun configWebview() {
         webview.webViewClient = object : WebViewClient() {
             private fun getRedirectUrl(url: String?): String? {
                 if (url?.contains(urlRegex) == true) {
@@ -111,7 +104,14 @@ class MainFragment : Fragment() {
         webview.settings.domStorageEnabled = true
         webview.settings.javaScriptEnabled = true
         webview.loadUrl("https://auth.gog.com/auth?client_id=46899977096215655&redirect_uri=https%3A%2F%2Fembed.gog.com%2Fon_login_success%3Forigin%3Dclient&response_type=code&layout=client2")
-        urlRegex = Regex("^https://embed.gog.com/on_login_success.+")
+    }
+
+    private fun checkPermissions() {
+        if (hasPermissions(context, PERMISSIONS)) {
+            setDownloadButtonClickListener()
+        } else {
+            requestPermissions(PERMISSIONS.toTypedArray(), PERMISSION_REQUEST_CODE)
+        }
     }
 
     private fun hasPermissions(context: Context?, permissions: List<String>): Boolean {
